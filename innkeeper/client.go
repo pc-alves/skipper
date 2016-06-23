@@ -45,6 +45,7 @@ const (
 
 	createAction = actionType("create")
 	deleteAction = actionType("delete")
+	updateAction = actionType("update")
 )
 
 // json serialization object for innkeeper route definitions
@@ -75,10 +76,12 @@ type Options struct {
 	// Authentication to be used when connecting to Innkeeper.
 	Authentication Authentication
 
+  // do we still need this?? as innkeeper supports it
 	// An eskip filter chain expression to prepend to each route loaded
 	// from Innkeeper. (E.g. "filter1() -> filter2() -> filter3()")
 	PreRouteFilters string
 
+  // do we still need this?? as innkeeper supports it also
 	// An eskip filter chain expression to append to each route loaded
 	// from Innkeeper. (E.g. "filter1() -> filter2() -> filter3()")
 	PostRouteFilters string
@@ -142,6 +145,8 @@ func convertJsonToEskip(data []*routeData, prependFilters, appendFilters []*eski
 			}
 		case deleteAction:
 			deleted = append(deleted, d.Name)
+		case updateAction:
+			// updated = append(updated...)
 		}
 	}
 
@@ -331,7 +336,7 @@ func (c *Client) LoadAll() ([]*eskip.Route, error) {
 	return routes, nil
 }
 
-// Returns all new and deleted routes from Innkeeper since the last LoadAll request.
+// Returns all new, updated and deleted routes from Innkeeper since the last LoadAll request.
 func (c *Client) LoadUpdate() ([]*eskip.Route, []string, error) {
 	d, err := c.requestData(true, c.opts.Address+fmt.Sprintf(updatePathFmt, c.lastChanged))
 	if err != nil {
