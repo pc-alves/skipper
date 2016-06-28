@@ -434,7 +434,7 @@ func TestCompress(t *testing.T) {
 		req, err := http.NewRequest("GET", p.URL, nil)
 		if err != nil {
 			t.Error(ti.msg, err)
-			return
+			continue
 		}
 
 		req.Header.Set("Accept-Encoding", ti.acceptEncoding)
@@ -442,7 +442,7 @@ func TestCompress(t *testing.T) {
 		rsp, err := http.DefaultTransport.RoundTrip(req)
 		if err != nil {
 			t.Error(ti.msg, err)
-			return
+			continue
 		}
 
 		defer rsp.Body.Close()
@@ -459,7 +459,7 @@ func TestCompress(t *testing.T) {
 			printHeader(t, rsp.Header, ti.msg, "invalid header", "got")
 
 			t.Error(ti.msg, "invalid header")
-			return
+			continue
 		}
 
 		if ok, err := compareBody(rsp, ti.contentLength); err != nil {

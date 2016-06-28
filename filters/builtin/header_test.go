@@ -204,7 +204,7 @@ func TestHeader(t *testing.T) {
 		req, err := http.NewRequest("GET", pr.URL, nil)
 		if err != nil {
 			t.Error(ti.msg, err)
-			return
+			continue
 		}
 
 		for n, vs := range ti.requestHeader {
@@ -214,13 +214,13 @@ func TestHeader(t *testing.T) {
 		rsp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Error(ti.msg, err)
-			return
+			continue
 		}
 
 		if ti.valid && rsp.StatusCode != http.StatusOK ||
 			!ti.valid && rsp.StatusCode != http.StatusNotFound {
 			t.Error(ti.msg, "failed to validate arguments")
-			return
+			continue
 		}
 
 		if ti.host != "" && ti.host != rsp.Header.Get("X-Request-Host") {

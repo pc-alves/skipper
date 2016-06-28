@@ -6,12 +6,14 @@ import (
 )
 
 func checkStatus(t *testing.T, url string, status int) {
-	if rsp, err := http.Get(url); err == nil {
-		if rsp.StatusCode != status {
-			t.Error("failed to use proper handler")
-		}
-	} else {
+	rsp, err := http.Get(url)
+	if err != nil {
 		t.Error(err)
+		return
+	}
+
+	if rsp.StatusCode != status {
+		t.Error("failed to use proper handler")
 	}
 }
 
@@ -61,7 +63,6 @@ func TestReusesServer(t *testing.T) {
 }
 
 func TestClosesIdle(t *testing.T) {
-
 	p := NewServerPool()
 	defer p.Close()
 
