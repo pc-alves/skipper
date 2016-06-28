@@ -3,7 +3,6 @@ package oauth
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -119,31 +118,33 @@ func TestGetUser(t *testing.T) {
 }
 
 func TestAuthenticate(t *testing.T) {
-	httptesting.WithServer(successHandler, func(oas *httptest.Server) {
-		oauthClient := New("", oas.URL, "scope0 scope1")
-		authToken, err := oauthClient.GetToken()
+	oas := httptesting.Pool.Get(successHandler)
+	defer httptesting.Pool.Release(oas)
 
-		if err != nil {
-			t.Error(err)
-		}
+	oauthClient := New("", oas.URL, "scope0 scope1")
+	authToken, err := oauthClient.GetToken()
 
-		if authToken != testToken {
-			t.Error("invalid token", authToken)
-		}
-	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	if authToken != testToken {
+		t.Error("invalid token", authToken)
+	}
 }
 
 func TestAuthenticateFail(t *testing.T) {
-	httptesting.WithServer(failureHandler, func(oas *httptest.Server) {
-		oauthClient := New("", oas.URL, "scope0 scope1")
-		authToken, err := oauthClient.GetToken()
+	oas := httptesting.Pool.Get(failureHandler)
+	defer httptesting.Pool.Release(oas)
 
-		if err == nil {
-			t.Error("failed to fail")
-		}
+	oauthClient := New("", oas.URL, "scope0 scope1")
+	authToken, err := oauthClient.GetToken()
 
-		if authToken != "" {
-			t.Error("invalid token", authToken)
-		}
-	})
+	if err == nil {
+		t.Error("failed to fail")
+	}
+
+	if authToken != "" {
+		t.Error("invalid token", authToken)
+	}
 }

@@ -3,7 +3,6 @@ package proxy
 import (
 	"bytes"
 	"net/http"
-	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
 	"sync"
@@ -97,20 +96,21 @@ func getHTTPRequest(urlStr string) (*http.Request, error) {
 }
 
 func TestHTTPDialBackend(t *testing.T) {
-	httptesting.WithServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Test-Header", "test-value")
-	}), func(server *httptest.Server) {
-		p := getUpgradeProxy()
-		req, err := getHTTPRequest(server.URL)
-		if err != nil {
-			t.Errorf("getHTTPRequest returns an error: %v", err)
-		}
+	}))
+	httptesting.Pool.Release(server)
 
-		_, err = p.dialBackend(req)
-		if err != nil {
-			t.Errorf("Could not dial to %s, caused by: %v", req.Host, err)
-		}
-	})
+	p := getUpgradeProxy()
+	req, err := getHTTPRequest(server.URL)
+	if err != nil {
+		t.Errorf("getHTTPRequest returns an error: %v", err)
+	}
+
+	_, err = p.dialBackend(req)
+	if err != nil {
+		t.Errorf("Could not dial to %s, caused by: %v", req.Host, err)
+	}
 }
 
 func TestInvalidHTTPDialBackend(t *testing.T) {

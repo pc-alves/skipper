@@ -109,7 +109,7 @@ func delay() { time.Sleep(24 * time.Millisecond) }
 
 func TestGetRoundtrip(t *testing.T) {
 	payload := []byte("Hello World!")
-	httptesting.WithServer(testHandler(payload, 0, func(r *http.Request) {
+	s := httptesting.Pool.Get(testHandler(payload, 0, func(r *http.Request) {
 		if r.Method != "GET" {
 			t.Error("wrong request method")
 		}
@@ -117,62 +117,63 @@ func TestGetRoundtrip(t *testing.T) {
 		if th, ok := r.Header["X-Test-Header"]; !ok || th[0] != "test value" {
 			t.Error("wrong request header")
 		}
-	}), func(s *httptest.Server) {
-		u, _ := url.ParseRequestURI("https://www.example.org/hello")
-		r := &http.Request{
-			URL:    u,
-			Method: "GET",
-			Header: http.Header{"X-Test-Header": []string{"test value"}}}
-		w := httptest.NewRecorder()
+	}))
+	defer httptesting.Pool.Release(s)
 
-		doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s.URL)
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	u, _ := url.ParseRequestURI("https://www.example.org/hello")
+	r := &http.Request{
+		URL:    u,
+		Method: "GET",
+		Header: http.Header{"X-Test-Header": []string{"test value"}}}
+	w := httptest.NewRecorder()
 
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				nil,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags: FlagsNone})
+	doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			nil,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: FlagsNone})
 
-		p.ServeHTTP(w, r)
+	delay()
 
-		if w.Code != http.StatusOK {
-			t.Error("wrong status", w.Code)
-		}
+	p.ServeHTTP(w, r)
 
-		if ct, ok := w.Header()["Content-Type"]; !ok || ct[0] != "text/plain" {
-			t.Errorf("wrong content type. Expected 'text/plain' but got '%s'", w.Header().Get("Content-Type"))
-		}
+	if w.Code != http.StatusOK {
+		t.Error("wrong status", w.Code)
+	}
 
-		if cl, ok := w.Header()["Content-Length"]; !ok || cl[0] != strconv.Itoa(len(payload)) {
-			t.Error("wrong content length")
-		}
+	if ct, ok := w.Header()["Content-Type"]; !ok || ct[0] != "text/plain" {
+		t.Errorf("wrong content type. Expected 'text/plain' but got '%s'", w.Header().Get("Content-Type"))
+	}
 
-		if xpb, ok := w.Header()["X-Powered-By"]; !ok || xpb[0] != "Skipper" {
-			t.Error("Wrong X-Powered-By header value")
-		}
+	if cl, ok := w.Header()["Content-Length"]; !ok || cl[0] != strconv.Itoa(len(payload)) {
+		t.Error("wrong content length")
+	}
 
-		if xpb, ok := w.Header()["Server"]; !ok || xpb[0] != "Skipper" {
-			t.Error("Wrong Server header value")
-		}
+	if xpb, ok := w.Header()["X-Powered-By"]; !ok || xpb[0] != "Skipper" {
+		t.Error("Wrong X-Powered-By header value")
+	}
 
-		if !bytes.Equal(w.Body.Bytes(), payload) {
-			t.Error("wrong content", string(w.Body.Bytes()))
-		}
-	})
+	if xpb, ok := w.Header()["Server"]; !ok || xpb[0] != "Skipper" {
+		t.Error("Wrong Server header value")
+	}
+
+	if !bytes.Equal(w.Body.Bytes(), payload) {
+		t.Error("wrong content", string(w.Body.Bytes()))
+	}
 }
 
 func TestPostRoundtrip(t *testing.T) {
-	httptesting.WithServer(testHandler(nil, 0, func(r *http.Request) {
+	s := httptesting.Pool.Get(testHandler(nil, 0, func(r *http.Request) {
 		if r.Method != "POST" {
 			t.Error("wrong request method", r.Method)
 		}
@@ -180,213 +181,215 @@ func TestPostRoundtrip(t *testing.T) {
 		if th, ok := r.Header["X-Test-Header"]; !ok || th[0] != "test value" {
 			t.Error("wrong request header")
 		}
-	}), func(s *httptest.Server) {
-		u, _ := url.ParseRequestURI("https://www.example.org/hello")
-		r := &http.Request{
-			URL:    u,
-			Method: "POST",
-			Header: http.Header{"X-Test-Header": []string{"test value"}}}
-		w := httptest.NewRecorder()
+	}))
+	defer httptesting.Pool.Release(s)
 
-		doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s.URL)
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	u, _ := url.ParseRequestURI("https://www.example.org/hello")
+	r := &http.Request{
+		URL:    u,
+		Method: "POST",
+		Header: http.Header{"X-Test-Header": []string{"test value"}}}
+	w := httptest.NewRecorder()
 
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				nil,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags: FlagsNone})
+	doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			nil,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: FlagsNone})
 
-		p.ServeHTTP(w, r)
+	delay()
 
-		if w.Code != http.StatusOK {
-			t.Error("wrong status", w.Code)
-		}
+	p.ServeHTTP(w, r)
 
-		if w.Body.Len() != 0 {
-			t.Error("wrong content", string(w.Body.Bytes()))
-		}
-	})
+	if w.Code != http.StatusOK {
+		t.Error("wrong status", w.Code)
+	}
+
+	if w.Body.Len() != 0 {
+		t.Error("wrong content", string(w.Body.Bytes()))
+	}
 }
 
 func TestRoute(t *testing.T) {
 	payload1 := []byte("host one")
 	payload2 := []byte("host two")
 
-	httptesting.WithServers([]http.Handler{
-		testHandler(payload1, 0, voidCheck),
-		testHandler(payload2, 0, voidCheck)},
-		func(s []*httptest.Server) {
-			s1, s2 := s[0], s[1]
-			doc := fmt.Sprintf(`
-				route1: Path("/host-one/*any") -> "%s";
-				route2: Path("/host-two/*any") -> "%s"
-			`, s1.URL, s2.URL)
-			dc, err := testdataclient.NewDoc(doc)
-			if err != nil {
-				t.Error(err)
-			}
+	s1 := httptesting.Pool.Get(testHandler(payload1, 0, voidCheck))
+	defer httptesting.Pool.Release(s1)
+	s2 := httptesting.Pool.Get(testHandler(payload2, 0, voidCheck))
+	defer httptesting.Pool.Release(s2)
 
-			p := WithParams(Params{
-				Routing: routing.New(routing.Options{
-					nil,
-					routing.MatchingOptionsNone,
-					sourcePollTimeout,
-					[]routing.DataClient{dc},
-					nil,
-					0}),
-				Flags: FlagsNone})
+	doc := fmt.Sprintf(`
+		route1: Path("/host-one/*any") -> "%s";
+		route2: Path("/host-two/*any") -> "%s"
+	`, s1.URL, s2.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-			delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			nil,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: FlagsNone})
 
-			var (
-				r *http.Request
-				w *httptest.ResponseRecorder
-				u *url.URL
-			)
+	delay()
 
-			u, _ = url.ParseRequestURI("https://www.example.org/host-one/some/path")
-			r = &http.Request{
-				URL:    u,
-				Method: "GET"}
-			w = httptest.NewRecorder()
-			p.ServeHTTP(w, r)
-			if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), payload1) {
-				t.Error("wrong routing 1")
-			}
+	var (
+		r *http.Request
+		w *httptest.ResponseRecorder
+		u *url.URL
+	)
 
-			u, _ = url.ParseRequestURI("https://www.example.org/host-two/some/path")
-			r = &http.Request{
-				URL:    u,
-				Method: "GET"}
-			w = httptest.NewRecorder()
-			p.ServeHTTP(w, r)
-			if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), payload2) {
-				t.Error("wrong routing 2")
-			}
-		})
+	u, _ = url.ParseRequestURI("https://www.example.org/host-one/some/path")
+	r = &http.Request{
+		URL:    u,
+		Method: "GET"}
+	w = httptest.NewRecorder()
+	p.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), payload1) {
+		t.Error("wrong routing 1")
+	}
+
+	u, _ = url.ParseRequestURI("https://www.example.org/host-two/some/path")
+	r = &http.Request{
+		URL:    u,
+		Method: "GET"}
+	w = httptest.NewRecorder()
+	p.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), payload2) {
+		t.Error("wrong routing 2")
+	}
 }
 
 func TestStreaming(t *testing.T) {
 	const expectedParts = 3
 	payload := []byte("some data to stream")
 
-	httptesting.WithServer(testHandler(payload, expectedParts, voidCheck), func(s *httptest.Server) {
-		doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s.URL)
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	s := httptesting.Pool.Get(testHandler(payload, expectedParts, voidCheck))
+	defer httptesting.Pool.Release(s)
 
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				nil,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags: FlagsNone})
+	doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			nil,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: FlagsNone})
 
-		u, _ := url.ParseRequestURI("https://www.example.org/hello")
-		r := &http.Request{
-			URL:    u,
-			Method: "GET"}
-		w := httptest.NewRecorder()
+	delay()
 
-		parts := 0
-		total := 0
-		done := make(chan int)
-		go p.ServeHTTP(w, r)
-		go func() {
-			for {
-				buf := w.Body.Bytes()
+	u, _ := url.ParseRequestURI("https://www.example.org/hello")
+	r := &http.Request{
+		URL:    u,
+		Method: "GET"}
+	w := httptest.NewRecorder()
 
-				if len(buf) == 0 {
-					time.Sleep(streamingDelay)
-					continue
-				}
+	parts := 0
+	total := 0
+	done := make(chan int)
+	go p.ServeHTTP(w, r)
+	go func() {
+		for {
+			buf := w.Body.Bytes()
 
-				parts++
-				total += len(buf)
-
-				if total >= len(payload) {
-					close(done)
-					return
-				}
+			if len(buf) == 0 {
+				time.Sleep(streamingDelay)
+				continue
 			}
-		}()
 
-		select {
-		case <-done:
-			if parts <= expectedParts {
-				t.Error("streaming failed", parts)
+			parts++
+			total += len(buf)
+
+			if total >= len(payload) {
+				close(done)
+				return
 			}
-		case <-time.After(150 * time.Millisecond):
-			t.Error("streaming timeout")
 		}
-	})
+	}()
+
+	select {
+	case <-done:
+		if parts <= expectedParts {
+			t.Error("streaming failed", parts)
+		}
+	case <-time.After(150 * time.Millisecond):
+		t.Error("streaming timeout")
+	}
 }
 
 func TestAppliesFilters(t *testing.T) {
 	payload := []byte("Hello World!")
 
-	httptesting.WithServer(testHandler(payload, 0, func(r *http.Request) {
+	s := httptesting.Pool.Get(testHandler(payload, 0, func(r *http.Request) {
 		if h, ok := r.Header["X-Test-Request-Header"]; !ok ||
 			h[0] != "request header value" {
 			t.Error("request header is missing")
 		}
-	}), func(s *httptest.Server) {
-		u, _ := url.ParseRequestURI("https://www.example.org/hello")
-		r := &http.Request{
-			URL:    u,
-			Method: "GET",
-			Header: http.Header{"X-Test-Header": []string{"test value"}}}
-		w := httptest.NewRecorder()
+	}))
+	defer httptesting.Pool.Release(s)
 
-		fr := make(filters.Registry)
-		fr.Register(builtin.NewRequestHeader())
-		fr.Register(builtin.NewResponseHeader())
+	u, _ := url.ParseRequestURI("https://www.example.org/hello")
+	r := &http.Request{
+		URL:    u,
+		Method: "GET",
+		Header: http.Header{"X-Test-Header": []string{"test value"}}}
+	w := httptest.NewRecorder()
 
-		doc := fmt.Sprintf(`hello:
-			Path("/hello") ->
-			requestHeader("X-Test-Request-Header", "request header value") ->
-			responseHeader("X-Test-Response-Header", "response header value") ->
-			"%s"`, s.URL)
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	fr := make(filters.Registry)
+	fr.Register(builtin.NewRequestHeader())
+	fr.Register(builtin.NewResponseHeader())
 
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				fr,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags: FlagsNone})
+	doc := fmt.Sprintf(`hello:
+		Path("/hello") ->
+		requestHeader("X-Test-Request-Header", "request header value") ->
+		responseHeader("X-Test-Response-Header", "response header value") ->
+		"%s"`, s.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			fr,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: FlagsNone})
 
-		p.ServeHTTP(w, r)
+	delay()
 
-		if h, ok := w.Header()["X-Test-Response-Header"]; !ok || h[0] != "response header value" {
-			t.Error("missing response header")
-		}
-	})
+	p.ServeHTTP(w, r)
+
+	if h, ok := w.Header()["X-Test-Response-Header"]; !ok || h[0] != "response header value" {
+		t.Error("missing response header")
+	}
 }
 
 type breaker struct {
@@ -399,69 +402,70 @@ func (b *breaker) CreateFilter(fc []interface{}) (filters.Filter, error) { retur
 func (_ *breaker) Name() string                                          { return "breaker" }
 
 func TestBreakFilterChain(t *testing.T) {
-	httptesting.WithServer(testHandler([]byte("Hello World!"), 0, func(r *http.Request) {
+	s := httptesting.Pool.Get(testHandler([]byte("Hello World!"), 0, func(r *http.Request) {
 		t.Error("This should never be called")
-	}), func(s *httptest.Server) {
-		fr := make(filters.Registry)
-		fr.Register(builtin.NewRequestHeader())
-		resp1 := &http.Response{
-			Header:     make(http.Header),
-			Body:       ioutil.NopCloser(new(bytes.Buffer)),
-			StatusCode: http.StatusUnauthorized,
-			Status:     "Impossible body",
-		}
-		fr.Register(&breaker{resp1})
-		fr.Register(builtin.NewResponseHeader())
+	}))
+	defer httptesting.Pool.Release(s)
 
-		doc := fmt.Sprintf(`breakerDemo:
-			Path("/breaker") ->
-			requestHeader("X-Expected", "request header") ->
-			responseHeader("X-Expected", "response header") ->
-			breaker() ->
-			requestHeader("X-Unexpected", "foo") ->
-			responseHeader("X-Unexpected", "bar") ->
-			"%s"`, s.URL)
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	fr := make(filters.Registry)
+	fr.Register(builtin.NewRequestHeader())
+	resp1 := &http.Response{
+		Header:     make(http.Header),
+		Body:       ioutil.NopCloser(new(bytes.Buffer)),
+		StatusCode: http.StatusUnauthorized,
+		Status:     "Impossible body",
+	}
+	fr.Register(&breaker{resp1})
+	fr.Register(builtin.NewResponseHeader())
 
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				fr,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags: FlagsNone})
+	doc := fmt.Sprintf(`breakerDemo:
+		Path("/breaker") ->
+		requestHeader("X-Expected", "request header") ->
+		responseHeader("X-Expected", "response header") ->
+		breaker() ->
+		requestHeader("X-Unexpected", "foo") ->
+		responseHeader("X-Unexpected", "bar") ->
+		"%s"`, s.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			fr,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: FlagsNone})
 
-		r, _ := http.NewRequest("GET", "https://www.example.org/breaker", nil)
-		w := httptest.NewRecorder()
-		p.ServeHTTP(w, r)
+	delay()
 
-		if _, has := r.Header["X-Expected"]; !has {
-			t.Error("Request is missing the expected header (added during filter chain winding)")
-		}
+	r, _ := http.NewRequest("GET", "https://www.example.org/breaker", nil)
+	w := httptest.NewRecorder()
+	p.ServeHTTP(w, r)
 
-		if _, has := w.Header()["X-Expected"]; !has {
-			t.Error("Response is missing the expected header (added during filter chain unwinding)")
-		}
+	if _, has := r.Header["X-Expected"]; !has {
+		t.Error("Request is missing the expected header (added during filter chain winding)")
+	}
 
-		if _, has := r.Header["X-Unexpected"]; has {
-			t.Error("Request has an unexpected header from a filter after the breaker in the chain")
-		}
+	if _, has := w.Header()["X-Expected"]; !has {
+		t.Error("Response is missing the expected header (added during filter chain unwinding)")
+	}
 
-		if _, has := w.Header()["X-Unexpected"]; has {
-			t.Error("Response has an unexpected header from a filter after the breaker in the chain")
-		}
+	if _, has := r.Header["X-Unexpected"]; has {
+		t.Error("Request has an unexpected header from a filter after the breaker in the chain")
+	}
 
-		if w.Code != http.StatusUnauthorized && w.Body.String() != "Impossible body" {
-			t.Errorf("Wrong status code/body. Expected 401 - Impossible body but got %d - %s", w.Code, w.Body.String())
-		}
-	})
+	if _, has := w.Header()["X-Unexpected"]; has {
+		t.Error("Response has an unexpected header from a filter after the breaker in the chain")
+	}
+
+	if w.Code != http.StatusUnauthorized && w.Body.String() != "Impossible body" {
+		t.Errorf("Wrong status code/body. Expected 401 - Impossible body but got %d - %s", w.Code, w.Body.String())
+	}
 }
 
 func TestProcessesRequestWithShuntBackend(t *testing.T) {
@@ -501,105 +505,106 @@ func TestProcessesRequestWithShuntBackend(t *testing.T) {
 }
 
 func TestProcessesRequestWithPriorityRoute(t *testing.T) {
-	httptesting.WithServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Test-Header", "test-value")
-	}), func(s *httptest.Server) {
-		req, err := http.NewRequest(
-			"GET",
-			"https://example.org",
-			nil)
-		if err != nil {
-			t.Error(err)
-		}
+	}))
+	defer httptesting.Pool.Release(s)
 
-		u, err := url.Parse(s.URL)
-		if err != nil {
-			t.Error(err)
-		}
+	req, err := http.NewRequest(
+		"GET",
+		"https://example.org",
+		nil)
+	if err != nil {
+		t.Error(err)
+	}
 
-		prt := &priorityRoute{&routing.Route{Scheme: u.Scheme, Host: u.Host}, nil, func(r *http.Request) bool {
-			return r == req
-		}}
+	u, err := url.Parse(s.URL)
+	if err != nil {
+		t.Error(err)
+	}
 
-		doc := `hello: Path("/hello") -> <shunt>`
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	prt := &priorityRoute{&routing.Route{Scheme: u.Scheme, Host: u.Host}, nil, func(r *http.Request) bool {
+		return r == req
+	}}
 
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				nil,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags:          FlagsNone,
-			PriorityRoutes: []PriorityRoute{prt}})
+	doc := `hello: Path("/hello") -> <shunt>`
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			nil,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags:          FlagsNone,
+		PriorityRoutes: []PriorityRoute{prt}})
 
-		w := httptest.NewRecorder()
-		p.ServeHTTP(w, req)
-		if w.Header().Get("X-Test-Header") != "test-value" {
-			t.Error("failed match priority route")
-		}
-	})
+	delay()
+
+	w := httptest.NewRecorder()
+	p.ServeHTTP(w, req)
+	if w.Header().Get("X-Test-Header") != "test-value" {
+		t.Error("failed match priority route")
+	}
 }
 
 func TestProcessesRequestWithPriorityRouteOverStandard(t *testing.T) {
-	httptesting.WithServers([]http.Handler{
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Test-Header", "priority-value")
-		}),
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Test-Header", "normal-value")
-		})},
-		func(s []*httptest.Server) {
-			s0, s1 := s[0], s[1]
-			req, err := http.NewRequest(
-				"GET",
-				"https://example.org/hello/world",
-				nil)
-			if err != nil {
-				t.Error(err)
-			}
+	s0 := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Test-Header", "priority-value")
+	}))
+	defer httptesting.Pool.Release(s0)
 
-			u, err := url.Parse(s0.URL)
-			if err != nil {
-				t.Error(err)
-			}
+	s1 := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Test-Header", "normal-value")
+	}))
+	defer httptesting.Pool.Release(s1)
 
-			prt := &priorityRoute{&routing.Route{Scheme: u.Scheme, Host: u.Host}, nil, func(r *http.Request) bool {
-				return r == req
-			}}
+	req, err := http.NewRequest(
+		"GET",
+		"https://example.org/hello/world",
+		nil)
+	if err != nil {
+		t.Error(err)
+	}
 
-			doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s1.URL)
-			dc, err := testdataclient.NewDoc(doc)
-			if err != nil {
-				t.Error(err)
-			}
+	u, err := url.Parse(s0.URL)
+	if err != nil {
+		t.Error(err)
+	}
 
-			p := WithParams(Params{
-				Routing: routing.New(routing.Options{
-					nil,
-					routing.MatchingOptionsNone,
-					sourcePollTimeout,
-					[]routing.DataClient{dc},
-					nil,
-					0}),
-				Flags:          FlagsNone,
-				PriorityRoutes: []PriorityRoute{prt}})
+	prt := &priorityRoute{&routing.Route{Scheme: u.Scheme, Host: u.Host}, nil, func(r *http.Request) bool {
+		return r == req
+	}}
 
-			delay()
+	doc := fmt.Sprintf(`hello: Path("/hello") -> "%s"`, s1.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-			w := httptest.NewRecorder()
-			p.ServeHTTP(w, req)
-			if w.Header().Get("X-Test-Header") != "priority-value" {
-				t.Error("failed match priority route")
-			}
-		})
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			nil,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags:          FlagsNone,
+		PriorityRoutes: []PriorityRoute{prt}})
+
+	delay()
+
+	w := httptest.NewRecorder()
+	p.ServeHTTP(w, req)
+	if w.Header().Get("X-Test-Header") != "priority-value" {
+		t.Error("failed match priority route")
+	}
 }
 
 func TestFlusherImplementation(t *testing.T) {
@@ -609,281 +614,285 @@ func TestFlusherImplementation(t *testing.T) {
 		w.Write([]byte("world!"))
 	})
 
-	httptesting.WithServer(h, func(ts *httptest.Server) {
-		doc := fmt.Sprintf(`* -> "%s"`, ts.URL)
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	ts := httptesting.Pool.Get(h)
+	defer httptesting.Pool.Release(ts)
 
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				nil,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags: FlagsNone})
+	doc := fmt.Sprintf(`* -> "%s"`, ts.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			nil,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: FlagsNone})
 
-		a := fmt.Sprintf(":%d", 1<<16-rand.Intn(1<<15))
-		ps := &http.Server{Addr: a, Handler: p}
-		go ps.ListenAndServe()
+	delay()
 
-		// let the server start listening
-		time.Sleep(15 * time.Millisecond)
+	a := fmt.Sprintf(":%d", 1<<16-rand.Intn(1<<15))
+	ps := &http.Server{Addr: a, Handler: p}
+	go ps.ListenAndServe()
 
-		rsp, err := http.Get("http://127.0.0.1" + a)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		defer rsp.Body.Close()
-		b, err := ioutil.ReadAll(rsp.Body)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if string(b) != "Hello, world!" {
-			t.Error("failed to receive response")
-		}
-	})
+	// let the server start listening
+	time.Sleep(15 * time.Millisecond)
+
+	rsp, err := http.Get("http://127.0.0.1" + a)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer rsp.Body.Close()
+	b, err := ioutil.ReadAll(rsp.Body)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if string(b) != "Hello, world!" {
+		t.Error("failed to receive response")
+	}
 }
 
 func TestOriginalRequestResponse(t *testing.T) {
-	httptesting.WithServer(testHandler(nil, 0, func(r *http.Request) {
+	s := httptesting.Pool.Get(testHandler(nil, 0, func(r *http.Request) {
 		if th, ok := r.Header["X-Test-Header-Preserved"]; !ok || th[0] != "test value" {
 			t.Error("wrong request header")
 		}
-	}), func(s *httptest.Server) {
-		u, _ := url.ParseRequestURI("https://www.example.org/hello")
-		r := &http.Request{
-			URL:    u,
-			Method: "GET",
-			Header: http.Header{"X-Test-Header": []string{"test value"}}}
-		w := httptest.NewRecorder()
+	}))
+	defer httptesting.Pool.Release(s)
 
-		doc := fmt.Sprintf(`hello: Path("/hello") -> preserveOriginal() -> "%s"`, s.URL)
-		dc, err := testdataclient.NewDoc(doc)
-		if err != nil {
-			t.Error(err)
-		}
+	u, _ := url.ParseRequestURI("https://www.example.org/hello")
+	r := &http.Request{
+		URL:    u,
+		Method: "GET",
+		Header: http.Header{"X-Test-Header": []string{"test value"}}}
+	w := httptest.NewRecorder()
 
-		fr := builtin.MakeRegistry()
-		fr.Register(&preserveOriginalSpec{})
-		p := WithParams(Params{
-			Routing: routing.New(routing.Options{
-				fr,
-				routing.MatchingOptionsNone,
-				sourcePollTimeout,
-				[]routing.DataClient{dc},
-				nil,
-				0}),
-			Flags: PreserveOriginal})
+	doc := fmt.Sprintf(`hello: Path("/hello") -> preserveOriginal() -> "%s"`, s.URL)
+	dc, err := testdataclient.NewDoc(doc)
+	if err != nil {
+		t.Error(err)
+	}
 
-		delay()
+	fr := builtin.MakeRegistry()
+	fr.Register(&preserveOriginalSpec{})
+	p := WithParams(Params{
+		Routing: routing.New(routing.Options{
+			fr,
+			routing.MatchingOptionsNone,
+			sourcePollTimeout,
+			[]routing.DataClient{dc},
+			nil,
+			0}),
+		Flags: PreserveOriginal})
 
-		p.ServeHTTP(w, r)
+	delay()
 
-		if th, ok := w.Header()["X-Test-Response-Header-Preserved"]; !ok || th[0] != "response header value" {
-			t.Error("wrong response header", ok)
-		}
-	})
+	p.ServeHTTP(w, r)
+
+	if th, ok := w.Header()["X-Test-Response-Header-Preserved"]; !ok || th[0] != "response header value" {
+		t.Error("wrong response header", ok)
+	}
 }
 
 func TestHostHeader(t *testing.T) {
 	// start a test backend that returns the received host header
-	httptesting.WithServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	backend := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Received-Host", r.Host)
-	}), func(backend *httptest.Server) {
-		// take the generated host part of the backend
-		bu, err := url.Parse(backend.URL)
+	}))
+	defer httptesting.Pool.Release(backend)
+
+	// take the generated host part of the backend
+	bu, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Error("failed to parse test backend url")
+		return
+	}
+	backendHost := bu.Host
+
+	for _, ti := range []struct {
+		msg          string
+		flags        Flags
+		routeFmt     string
+		incomingHost string
+		expectedHost string
+	}{{
+		"no proxy preserve",
+		FlagsNone,
+		`route: Any() -> "%s"`,
+		"www.example.org",
+		backendHost,
+	}, {
+		"no proxy preserve, route preserve not",
+		FlagsNone,
+		`route: Any() -> preserveHost("false") -> "%s"`,
+		"www.example.org",
+		backendHost,
+	}, {
+		"no proxy preserve, route preserve",
+		FlagsNone,
+		`route: Any() -> preserveHost("true") -> "%s"`,
+		"www.example.org",
+		"www.example.org",
+	}, {
+		"no proxy preserve, route preserve not, explicit host last",
+		FlagsNone,
+		`route: Any() -> preserveHost("false") -> requestHeader("Host", "custom.example.org") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"no proxy preserve, route preserve, explicit host last",
+		FlagsNone,
+		`route: Any() -> preserveHost("true") -> requestHeader("Host", "custom.example.org") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"no proxy preserve, route preserve not, explicit host first",
+		FlagsNone,
+		`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("false") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"no proxy preserve, route preserve, explicit host last",
+		FlagsNone,
+		`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"proxy preserve",
+		PreserveHost,
+		`route: Any() -> "%s"`,
+		"www.example.org",
+		"www.example.org",
+	}, {
+		"proxy preserve, route preserve not",
+		PreserveHost,
+		`route: Any() -> preserveHost("false") -> "%s"`,
+		"www.example.org",
+		backendHost,
+	}, {
+		"proxy preserve, route preserve",
+		PreserveHost,
+		`route: Any() -> preserveHost("true") -> "%s"`,
+		"www.example.org",
+		"www.example.org",
+	}, {
+		"proxy preserve, route preserve not, explicit host last",
+		PreserveHost,
+		`route: Any() -> preserveHost("false") -> requestHeader("Host", "custom.example.org") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"proxy preserve, route preserve, explicit host last",
+		PreserveHost,
+		`route: Any() -> preserveHost("true") -> requestHeader("Host", "custom.example.org") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"proxy preserve, route preserve not, explicit host first",
+		PreserveHost,
+		`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("false") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"proxy preserve, route preserve, explicit host last",
+		PreserveHost,
+		`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}, {
+		"debug proxy, route not found",
+		PreserveHost | Debug,
+		`route: Path("/hello") -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
+		"www.example.org",
+		"",
+	}, {
+		"debug proxy, shunt route",
+		PreserveHost | Debug,
+		`route: Any() -> <shunt>`,
+		"www.example.org",
+		"",
+	}, {
+		"debug proxy, full circle",
+		PreserveHost | Debug,
+		`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
+		"www.example.org",
+		"custom.example.org",
+	}} {
+		// replace the host in the route format
+		f := ti.routeFmt + `;healthcheck: Path("/healthcheck") -> "%s"`
+		var route string
+		if strings.Contains(ti.routeFmt, "%s") {
+			route = fmt.Sprintf(f, backend.URL, backend.URL)
+		} else {
+			route = fmt.Sprintf(f, backend.URL)
+		}
+
+		// create a dataclient with the route
+		println(route)
+		dc, err := testdataclient.NewDoc(route)
 		if err != nil {
-			t.Error("failed to parse test backend url")
-			return
+			t.Error(ti.msg, "failed to parse route", err)
+			continue
 		}
-		backendHost := bu.Host
 
-		for _, ti := range []struct {
-			msg          string
-			flags        Flags
-			routeFmt     string
-			incomingHost string
-			expectedHost string
-		}{{
-			"no proxy preserve",
-			FlagsNone,
-			`route: Any() -> "%s"`,
-			"www.example.org",
-			backendHost,
-		}, {
-			"no proxy preserve, route preserve not",
-			FlagsNone,
-			`route: Any() -> preserveHost("false") -> "%s"`,
-			"www.example.org",
-			backendHost,
-		}, {
-			"no proxy preserve, route preserve",
-			FlagsNone,
-			`route: Any() -> preserveHost("true") -> "%s"`,
-			"www.example.org",
-			"www.example.org",
-		}, {
-			"no proxy preserve, route preserve not, explicit host last",
-			FlagsNone,
-			`route: Any() -> preserveHost("false") -> requestHeader("Host", "custom.example.org") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"no proxy preserve, route preserve, explicit host last",
-			FlagsNone,
-			`route: Any() -> preserveHost("true") -> requestHeader("Host", "custom.example.org") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"no proxy preserve, route preserve not, explicit host first",
-			FlagsNone,
-			`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("false") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"no proxy preserve, route preserve, explicit host last",
-			FlagsNone,
-			`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"proxy preserve",
-			PreserveHost,
-			`route: Any() -> "%s"`,
-			"www.example.org",
-			"www.example.org",
-		}, {
-			"proxy preserve, route preserve not",
-			PreserveHost,
-			`route: Any() -> preserveHost("false") -> "%s"`,
-			"www.example.org",
-			backendHost,
-		}, {
-			"proxy preserve, route preserve",
-			PreserveHost,
-			`route: Any() -> preserveHost("true") -> "%s"`,
-			"www.example.org",
-			"www.example.org",
-		}, {
-			"proxy preserve, route preserve not, explicit host last",
-			PreserveHost,
-			`route: Any() -> preserveHost("false") -> requestHeader("Host", "custom.example.org") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"proxy preserve, route preserve, explicit host last",
-			PreserveHost,
-			`route: Any() -> preserveHost("true") -> requestHeader("Host", "custom.example.org") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"proxy preserve, route preserve not, explicit host first",
-			PreserveHost,
-			`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("false") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"proxy preserve, route preserve, explicit host last",
-			PreserveHost,
-			`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}, {
-			"debug proxy, route not found",
-			PreserveHost | Debug,
-			`route: Path("/hello") -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
-			"www.example.org",
-			"",
-		}, {
-			"debug proxy, shunt route",
-			PreserveHost | Debug,
-			`route: Any() -> <shunt>`,
-			"www.example.org",
-			"",
-		}, {
-			"debug proxy, full circle",
-			PreserveHost | Debug,
-			`route: Any() -> requestHeader("Host", "custom.example.org") -> preserveHost("true") -> "%s"`,
-			"www.example.org",
-			"custom.example.org",
-		}} {
-			// replace the host in the route format
-			f := ti.routeFmt + `;healthcheck: Path("/healthcheck") -> "%s"`
-			var route string
-			if strings.Contains(ti.routeFmt, "%s") {
-				route = fmt.Sprintf(f, backend.URL, backend.URL)
-			} else {
-				route = fmt.Sprintf(f, backend.URL)
+		// start a proxy server
+		r := routing.New(routing.Options{
+			FilterRegistry:  builtin.MakeRegistry(),
+			MatchingOptions: routing.MatchingOptionsNone,
+			PollTimeout:     42 * time.Microsecond,
+			DataClients:     []routing.DataClient{dc}})
+		ps := httptesting.Pool.Get(WithParams(Params{Routing: r, Flags: ti.flags}))
+		defer httptesting.Pool.Release(ps)
+
+		// wait for the routing table was activated
+		healthcheckDone := make(chan struct{})
+		go func() {
+			for {
+				rs, _ := http.Get(ps.URL + "/healthcheck")
+				if rs != nil &&
+					rs.StatusCode >= http.StatusOK &&
+					rs.StatusCode < http.StatusMultipleChoices {
+					healthcheckDone <- struct{}{}
+					return
+				}
 			}
-
-			// create a dataclient with the route
-			println(route)
-			dc, err := testdataclient.NewDoc(route)
-			if err != nil {
-				t.Error(ti.msg, "failed to parse route", err)
-				continue
-			}
-
-			// start a proxy server
-			r := routing.New(routing.Options{
-				FilterRegistry:  builtin.MakeRegistry(),
-				MatchingOptions: routing.MatchingOptionsNone,
-				PollTimeout:     42 * time.Microsecond,
-				DataClients:     []routing.DataClient{dc}})
-			httptesting.WithServer(WithParams(Params{Routing: r, Flags: ti.flags}), func(ps *httptest.Server) {
-				// wait for the routing table was activated
-				healthcheckDone := make(chan struct{})
-				go func() {
-					for {
-						rs, _ := http.Get(ps.URL + "/healthcheck")
-						if rs != nil &&
-							rs.StatusCode >= http.StatusOK &&
-							rs.StatusCode < http.StatusMultipleChoices {
-							healthcheckDone <- struct{}{}
-							return
-						}
-					}
-				}()
-				timeouted := false
-				select {
-				case <-time.After(999 * time.Millisecond):
-					timeouted = true
-				case <-healthcheckDone:
-				}
-				if timeouted {
-					t.Error(ti.msg, "startup timeout")
-					return
-				}
-
-				req, err := http.NewRequest("GET", ps.URL, nil)
-				if err != nil {
-					t.Error(ti.msg, err)
-					return
-				}
-
-				req.Host = ti.incomingHost
-				rsp, err := (&http.Client{}).Do(req)
-				if err != nil {
-					t.Error(ti.msg, "failed to make request")
-					return
-				}
-
-				if ti.flags.Debug() {
-					return
-				}
-
-				if rsp.Header.Get("X-Received-Host") != ti.expectedHost {
-					t.Error(ti.msg, "wrong host", rsp.Header.Get("X-Received-Host"), ti.expectedHost)
-				}
-			})
+		}()
+		timeouted := false
+		select {
+		case <-time.After(999 * time.Millisecond):
+			timeouted = true
+		case <-healthcheckDone:
 		}
-	})
+		if timeouted {
+			t.Error(ti.msg, "startup timeout")
+			continue
+		}
+
+		req, err := http.NewRequest("GET", ps.URL, nil)
+		if err != nil {
+			t.Error(ti.msg, err)
+			continue
+		}
+
+		req.Host = ti.incomingHost
+		rsp, err := (&http.Client{}).Do(req)
+		if err != nil {
+			t.Error(ti.msg, "failed to make request")
+			continue
+		}
+
+		if ti.flags.Debug() {
+			continue
+		}
+
+		if rsp.Header.Get("X-Received-Host") != ti.expectedHost {
+			t.Error(ti.msg, "wrong host", rsp.Header.Get("X-Received-Host"), ti.expectedHost)
+		}
+	}
 }

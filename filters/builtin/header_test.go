@@ -2,7 +2,6 @@ package builtin
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -175,7 +174,7 @@ func TestHeader(t *testing.T) {
 		valid:      true,
 		host:       "www.example.org",
 	}} {
-		httptesting.WithServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bs := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for n, vs := range r.Header {
 				if strings.HasPrefix(n, "X-Test-") {
 					w.Header()["X-Test-Request-"+n[7:]] = vs
@@ -187,48 +186,49 @@ func TestHeader(t *testing.T) {
 			}
 
 			w.Header().Set("X-Request-Host", r.Host)
-		}), func(bs *httptest.Server) {
-			fr := make(filters.Registry)
-			fr.Register(NewSetRequestHeader())
-			fr.Register(NewAppendRequestHeader())
-			fr.Register(NewDropRequestHeader())
-			fr.Register(NewSetResponseHeader())
-			fr.Register(NewAppendResponseHeader())
-			fr.Register(NewDropResponseHeader())
-			pr := proxytest.New(fr, &eskip.Route{
-				Filters: []*eskip.Filter{{Name: ti.filterName, Args: ti.args}},
-				Backend: bs.URL})
-			defer pr.Close()
+		}))
+		defer httptesting.Pool.Release(bs)
 
-			req, err := http.NewRequest("GET", pr.URL, nil)
-			if err != nil {
-				t.Error(ti.msg, err)
-				return
-			}
+		fr := make(filters.Registry)
+		fr.Register(NewSetRequestHeader())
+		fr.Register(NewAppendRequestHeader())
+		fr.Register(NewDropRequestHeader())
+		fr.Register(NewSetResponseHeader())
+		fr.Register(NewAppendResponseHeader())
+		fr.Register(NewDropResponseHeader())
+		pr := proxytest.New(fr, &eskip.Route{
+			Filters: []*eskip.Filter{{Name: ti.filterName, Args: ti.args}},
+			Backend: bs.URL})
+		defer pr.Close()
 
-			for n, vs := range ti.requestHeader {
-				req.Header[n] = vs
-			}
+		req, err := http.NewRequest("GET", pr.URL, nil)
+		if err != nil {
+			t.Error(ti.msg, err)
+			return
+		}
 
-			rsp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Error(ti.msg, err)
-				return
-			}
+		for n, vs := range ti.requestHeader {
+			req.Header[n] = vs
+		}
 
-			if ti.valid && rsp.StatusCode != http.StatusOK ||
-				!ti.valid && rsp.StatusCode != http.StatusNotFound {
-				t.Error(ti.msg, "failed to validate arguments")
-				return
-			}
+		rsp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Error(ti.msg, err)
+			return
+		}
 
-			if ti.host != "" && ti.host != rsp.Header.Get("X-Request-Host") {
-				t.Error(ti.msg, "failed to set outgoing request host")
-			}
+		if ti.valid && rsp.StatusCode != http.StatusOK ||
+			!ti.valid && rsp.StatusCode != http.StatusNotFound {
+			t.Error(ti.msg, "failed to validate arguments")
+			return
+		}
 
-			if ti.valid {
-				testHeaders(t, ti.msg, rsp.Header, ti.expectedHeader)
-			}
-		})
+		if ti.host != "" && ti.host != rsp.Header.Get("X-Request-Host") {
+			t.Error(ti.msg, "failed to set outgoing request host")
+		}
+
+		if ti.valid {
+			testHeaders(t, ti.msg, rsp.Header, ti.expectedHeader)
+		}
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"net/http/httptest"
 	"path"
 	"strings"
 	"testing"
@@ -292,126 +291,131 @@ func TestConvertDoc(t *testing.T) {
 }
 
 func TestReceivesEmpty(t *testing.T) {
-	httptesting.WithServer(&innkeeperHandler{}, func(s *httptest.Server) {
-		c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
-		if err != nil {
-			t.Error(err)
-			return
-		}
+	s := httptesting.Pool.Get(&innkeeperHandler{})
+	defer httptesting.Pool.Release(s)
 
-		rs, err := c.LoadAll()
-		if err != nil || len(rs) != 0 {
-			t.Error(err, "failed to receive empty")
-		}
-	})
+	c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	rs, err := c.LoadAll()
+	if err != nil || len(rs) != 0 {
+		t.Error(err, "failed to receive empty")
+	}
 }
 
 func TestReceivesInitial(t *testing.T) {
 	d := testData()
-	httptesting.WithServer(&innkeeperHandler{d}, func(s *httptest.Server) {
-		c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
-		if err != nil {
-			t.Error(err)
-			return
-		}
+	s := httptesting.Pool.Get(&innkeeperHandler{d})
+	defer httptesting.Pool.Release(s)
 
-		rs, err := c.LoadAll()
-		if err != nil {
-			t.Error(err)
-		}
+	c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
-		checkDoc(t, rs, d)
-	})
+	rs, err := c.LoadAll()
+	if err != nil {
+		t.Error(err)
+	}
+
+	checkDoc(t, rs, d)
 }
 
 func TestFailingAuthOnReceive(t *testing.T) {
-	httptesting.WithServer(&innkeeperHandler{testData()}, func(s *httptest.Server) {
-		a := autoAuth(false)
+	s := httptesting.Pool.Get(&innkeeperHandler{testData()})
+	defer httptesting.Pool.Release(s)
 
-		c, err := New(Options{Address: s.URL, Authentication: a})
-		if err != nil {
-			t.Error(err)
-			return
-		}
+	a := autoAuth(false)
 
-		_, err = c.LoadAll()
-		if err == nil {
-			t.Error("failed to fail")
-		}
-	})
+	c, err := New(Options{Address: s.URL, Authentication: a})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, err = c.LoadAll()
+	if err == nil {
+		t.Error("failed to fail")
+	}
 }
 
 func TestReceivesUpdates(t *testing.T) {
 	d := testData()
 	h := &innkeeperHandler{d}
-	httptesting.WithServer(h, func(s *httptest.Server) {
-		c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
-		if err != nil {
-			t.Error(err)
-			return
-		}
+	s := httptesting.Pool.Get(h)
+	defer httptesting.Pool.Release(s)
 
-		c.LoadAll()
+	c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
-		d = testData()
-		d[2].Timestamp = "2015-09-28T16:58:56.958"
-		d[2].Action = deleteAction
+	c.LoadAll()
 
-		newRoute := &routeData{
-			Name:      "route4",
-			Timestamp: "2015-09-28T16:58:56.959",
-			Action:    createAction,
-			Eskip:     `Path("/") && Method("GET") -> "https://example.org"`,
-		}
+	d = testData()
+	d[2].Timestamp = "2015-09-28T16:58:56.958"
+	d[2].Action = deleteAction
 
-		d = append(d, newRoute)
-		h.data = d
+	newRoute := &routeData{
+		Name:      "route4",
+		Timestamp: "2015-09-28T16:58:56.959",
+		Action:    createAction,
+		Eskip:     `Path("/") && Method("GET") -> "https://example.org"`,
+	}
 
-		rs, ds, err := c.LoadUpdate()
-		if err != nil {
-			t.Error(err)
-		}
+	d = append(d, newRoute)
+	h.data = d
 
-		checkDoc(t, rs, []*routeData{newRoute})
-		if len(ds) != 1 || ds[0] != "route3" {
-			t.Error("unexpected delete")
-		}
-	})
+	rs, ds, err := c.LoadUpdate()
+	if err != nil {
+		t.Error(err)
+	}
+
+	checkDoc(t, rs, []*routeData{newRoute})
+	if len(ds) != 1 || ds[0] != "route3" {
+		t.Error("unexpected delete")
+	}
 }
 
 func TestFailingAuthOnUpdate(t *testing.T) {
 	d := testData()
 	h := &innkeeperHandler{d}
-	httptesting.WithServer(h, func(s *httptest.Server) {
-		c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
-		if err != nil {
-			t.Error(err)
-			return
-		}
+	s := httptesting.Pool.Get(h)
+	defer httptesting.Pool.Release(s)
 
-		c.LoadAll()
+	c, err := New(Options{Address: s.URL, Authentication: autoAuth(true)})
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
-		c.authToken = ""
-		c.opts.Authentication = autoAuth(false)
-		d = testData()
-		d[2].Timestamp = "2015-09-28T16:58:56.958"
-		d[2].Action = deleteAction
+	c.LoadAll()
 
-		newRoute := &routeData{
-			Name:      "route4",
-			Timestamp: "2015-09-28T16:58:56.959",
-			Action:    createAction,
-			Eskip:     `Path("/") && Method("GET") -> "https://example.org"`,
-		}
+	c.authToken = ""
+	c.opts.Authentication = autoAuth(false)
+	d = testData()
+	d[2].Timestamp = "2015-09-28T16:58:56.958"
+	d[2].Action = deleteAction
 
-		d = append(d, newRoute)
-		h.data = d
+	newRoute := &routeData{
+		Name:      "route4",
+		Timestamp: "2015-09-28T16:58:56.959",
+		Action:    createAction,
+		Eskip:     `Path("/") && Method("GET") -> "https://example.org"`,
+	}
 
-		_, _, err = c.LoadUpdate()
-		if err == nil {
-			t.Error("failed to fail")
-		}
-	})
+	d = append(d, newRoute)
+	h.data = d
+
+	_, _, err = c.LoadUpdate()
+	if err == nil {
+		t.Error("failed to fail")
+	}
 }
 
 func TestUsesPreAndPostRouteFilters(t *testing.T) {
@@ -420,52 +424,53 @@ func TestUsesPreAndPostRouteFilters(t *testing.T) {
 		di.Eskip = strings.Replace(di.Eskip, "->", "-> "+builtin.ModPathName+"(\".*\", \"replacement\") ->", 1)
 	}
 
-	httptesting.WithServer(&innkeeperHandler{d}, func(s *httptest.Server) {
-		c, err := New(Options{
-			Address:          s.URL,
-			Authentication:   autoAuth(true),
-			PreRouteFilters:  `filter1(3.14) -> filter2("key", 42)`,
-			PostRouteFilters: `filter3("Hello, world!")`})
-		if err != nil {
-			t.Error(err)
-			return
+	s := httptesting.Pool.Get(&innkeeperHandler{d})
+	defer httptesting.Pool.Release(s)
+
+	c, err := New(Options{
+		Address:          s.URL,
+		Authentication:   autoAuth(true),
+		PreRouteFilters:  `filter1(3.14) -> filter2("key", 42)`,
+		PostRouteFilters: `filter3("Hello, world!")`})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	rs, err := c.LoadAll()
+	if err != nil {
+		t.Error(err)
+	}
+
+	for _, r := range rs {
+		if len(r.Filters) != 4 {
+			t.Error("failed to parse filters 1")
 		}
 
-		rs, err := c.LoadAll()
-		if err != nil {
-			t.Error(err)
+		if r.Filters[0].Name != "filter1" ||
+			len(r.Filters[0].Args) != 1 ||
+			r.Filters[0].Args[0] != float64(3.14) {
+			t.Error("failed to parse filters 2")
 		}
 
-		for _, r := range rs {
-			if len(r.Filters) != 4 {
-				t.Error("failed to parse filters 1")
-			}
-
-			if r.Filters[0].Name != "filter1" ||
-				len(r.Filters[0].Args) != 1 ||
-				r.Filters[0].Args[0] != float64(3.14) {
-				t.Error("failed to parse filters 2")
-			}
-
-			if r.Filters[1].Name != "filter2" ||
-				len(r.Filters[1].Args) != 2 ||
-				r.Filters[1].Args[0] != "key" ||
-				r.Filters[1].Args[1] != float64(42) {
-				t.Error("failed to parse filters 3")
-			}
-
-			if r.Filters[2].Name != builtin.ModPathName ||
-				len(r.Filters[2].Args) != 2 ||
-				r.Filters[2].Args[0] != ".*" ||
-				r.Filters[2].Args[1] != "replacement" {
-				t.Error("failed to parse filters 4")
-			}
-
-			if r.Filters[3].Name != "filter3" ||
-				len(r.Filters[3].Args) != 1 ||
-				r.Filters[3].Args[0] != "Hello, world!" {
-				t.Error("failed to parse filters 5")
-			}
+		if r.Filters[1].Name != "filter2" ||
+			len(r.Filters[1].Args) != 2 ||
+			r.Filters[1].Args[0] != "key" ||
+			r.Filters[1].Args[1] != float64(42) {
+			t.Error("failed to parse filters 3")
 		}
-	})
+
+		if r.Filters[2].Name != builtin.ModPathName ||
+			len(r.Filters[2].Args) != 2 ||
+			r.Filters[2].Args[0] != ".*" ||
+			r.Filters[2].Args[1] != "replacement" {
+			t.Error("failed to parse filters 4")
+		}
+
+		if r.Filters[3].Name != "filter3" ||
+			len(r.Filters[3].Args) != 1 ||
+			r.Filters[3].Args[0] != "Hello, world!" {
+			t.Error("failed to parse filters 5")
+		}
+	}
 }
