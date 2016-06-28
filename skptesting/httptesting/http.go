@@ -23,6 +23,20 @@ type ServerPool struct {
 	quit         chan struct{}
 }
 
+var zeroHandler = http.HandlerFunc(func(rsp http.ResponseWriter, _ *http.Request) {
+	rsp.WriteHeader(http.StatusNotFound)
+})
+
+var (
+	Pool = NewServerPool()
+
+	OK = http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {})
+
+	Teapot = http.HandlerFunc(func(rsp http.ResponseWriter, _ *http.Request) {
+		rsp.WriteHeader(http.StatusTeapot)
+	})
+)
+
 func (h *handler) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	h.handler.ServeHTTP(rsp, req)
 }
@@ -43,7 +57,7 @@ func (s servers) get(h http.Handler) *httptest.Server {
 }
 
 func (s servers) release(si *httptest.Server) {
-	s[si].handler = nil
+	s[si].handler = zeroHandler
 	s[si].busy = false
 }
 
@@ -68,6 +82,7 @@ func NewServerPool() *ServerPool {
 				m.response <- s.get(m.handler)
 			case m := <-release:
 				s.release(m.server)
+				m.response <- nil
 			case <-quit:
 				s.closePool()
 				return
@@ -85,9 +100,27 @@ func (sp *ServerPool) Get(h http.Handler) *httptest.Server {
 }
 
 func (sp *ServerPool) Release(s *httptest.Server) {
-	go func() { sp.release <- message{server: s} }()
+	m := message{server: s, response: make(chan *httptest.Server)}
+	sp.release <- m
+	<-m.response
 }
 
 func (sp *ServerPool) Close() {
 	close(sp.quit)
+}
+
+func WithServers(h []http.Handler, f func([]*httptest.Server)) {
+	s := make([]*httptest.Server, len(h))
+	for i, hi := range h {
+		s[i] = Pool.Get(hi)
+		defer Pool.Release(s[i])
+	}
+
+	f(s)
+}
+
+func WithServer(h http.Handler, f func(*httptest.Server)) {
+	WithServers([]http.Handler{h}, func(s []*httptest.Server) {
+		f(s[0])
+	})
 }

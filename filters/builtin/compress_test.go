@@ -18,6 +18,7 @@ import (
 	"github.com/zalando/skipper/filters"
 	"github.com/zalando/skipper/filters/filtertest"
 	"github.com/zalando/skipper/proxy/proxytest"
+	"github.com/zalando/skipper/skptesting/httptesting"
 )
 
 const (
@@ -410,7 +411,7 @@ func TestCompress(t *testing.T) {
 			"Content-Encoding": []string{"gzip"},
 			"Vary":             []string{"Accept-Encoding"}},
 	}} {
-		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		httptesting.WithServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			setHeaders(w.Header(), ti.responseHeader)
 			count := 0
 			for count < ti.contentLength {
@@ -423,50 +424,49 @@ func TestCompress(t *testing.T) {
 				count += wl
 				time.Sleep(writeDelay)
 			}
-		}))
-		defer s.Close()
+		}), func(s *httptest.Server) {
+			p := proxytest.New(MakeRegistry(), &eskip.Route{
+				Filters: []*eskip.Filter{{Name: CompressName, Args: ti.compressArgs}},
+				Backend: s.URL})
+			defer p.Close()
 
-		p := proxytest.New(MakeRegistry(), &eskip.Route{
-			Filters: []*eskip.Filter{{Name: CompressName, Args: ti.compressArgs}},
-			Backend: s.URL})
-		defer p.Close()
+			req, err := http.NewRequest("GET", p.URL, nil)
+			if err != nil {
+				t.Error(ti.msg, err)
+				return
+			}
 
-		req, err := http.NewRequest("GET", p.URL, nil)
-		if err != nil {
-			t.Error(ti.msg, err)
-			continue
-		}
+			req.Header.Set("Accept-Encoding", ti.acceptEncoding)
 
-		req.Header.Set("Accept-Encoding", ti.acceptEncoding)
+			rsp, err := http.DefaultTransport.RoundTrip(req)
+			if err != nil {
+				t.Error(ti.msg, err)
+				return
+			}
 
-		rsp, err := http.DefaultTransport.RoundTrip(req)
-		if err != nil {
-			t.Error(ti.msg, err)
-			continue
-		}
+			defer rsp.Body.Close()
 
-		defer rsp.Body.Close()
+			rsp.Header.Del("Server")
+			rsp.Header.Del("X-Powered-By")
+			rsp.Header.Del("Date")
+			if rsp.Header.Get("Content-Type") == "application/octet-stream" {
+				rsp.Header.Del("Content-Type")
+			}
 
-		rsp.Header.Del("Server")
-		rsp.Header.Del("X-Powered-By")
-		rsp.Header.Del("Date")
-		if rsp.Header.Get("Content-Type") == "application/octet-stream" {
-			rsp.Header.Del("Content-Type")
-		}
+			if !compareHeaders(rsp.Header, ti.expectedHeader) {
+				printHeader(t, ti.expectedHeader, ti.msg, "invalid header", "expected")
+				printHeader(t, rsp.Header, ti.msg, "invalid header", "got")
 
-		if !compareHeaders(rsp.Header, ti.expectedHeader) {
-			printHeader(t, ti.expectedHeader, ti.msg, "invalid header", "expected")
-			printHeader(t, rsp.Header, ti.msg, "invalid header", "got")
+				t.Error(ti.msg, "invalid header")
+				return
+			}
 
-			t.Error(ti.msg, "invalid header")
-			continue
-		}
-
-		if ok, err := compareBody(rsp, ti.contentLength); err != nil {
-			t.Error(ti.msg, err)
-		} else if !ok {
-			t.Error(ti.msg, "invalid content")
-		}
+			if ok, err := compareBody(rsp, ti.contentLength); err != nil {
+				t.Error(ti.msg, err)
+			} else if !ok {
+				t.Error(ti.msg, "invalid content")
+			}
+		})
 	}
 }
 

@@ -1,17 +1,3 @@
-// Copyright 2015 Zalando SE
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package oauth
 
 import (
@@ -20,6 +6,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/zalando/skipper/skptesting/httptesting"
 )
 
 const (
@@ -131,31 +119,31 @@ func TestGetUser(t *testing.T) {
 }
 
 func TestAuthenticate(t *testing.T) {
-	oas := httptest.NewServer(successHandler)
-	defer oas.Close()
-	oauthClient := New("", oas.URL, "scope0 scope1")
-	authToken, err := oauthClient.GetToken()
+	httptesting.WithServer(successHandler, func(oas *httptest.Server) {
+		oauthClient := New("", oas.URL, "scope0 scope1")
+		authToken, err := oauthClient.GetToken()
 
-	if err != nil {
-		t.Error(err)
-	}
+		if err != nil {
+			t.Error(err)
+		}
 
-	if authToken != testToken {
-		t.Error("invalid token", authToken)
-	}
+		if authToken != testToken {
+			t.Error("invalid token", authToken)
+		}
+	})
 }
 
 func TestAuthenticateFail(t *testing.T) {
-	oas := httptest.NewServer(failureHandler)
-	defer oas.Close()
-	oauthClient := New("", oas.URL, "scope0 scope1")
-	authToken, err := oauthClient.GetToken()
+	httptesting.WithServer(failureHandler, func(oas *httptest.Server) {
+		oauthClient := New("", oas.URL, "scope0 scope1")
+		authToken, err := oauthClient.GetToken()
 
-	if err == nil {
-		t.Error("failed to fail")
-	}
+		if err == nil {
+			t.Error("failed to fail")
+		}
 
-	if authToken != "" {
-		t.Error("invalid token", authToken)
-	}
+		if authToken != "" {
+			t.Error("invalid token", authToken)
+		}
+	})
 }

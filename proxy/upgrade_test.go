@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/zalando/skipper/skptesting/httptesting"
 )
 
 func getEmptyUpgradeRequest() *http.Request {
@@ -95,21 +97,20 @@ func getHTTPRequest(urlStr string) (*http.Request, error) {
 }
 
 func TestHTTPDialBackend(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	httptesting.WithServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Test-Header", "test-value")
-	}))
-	defer server.Close()
+	}), func(server *httptest.Server) {
+		p := getUpgradeProxy()
+		req, err := getHTTPRequest(server.URL)
+		if err != nil {
+			t.Errorf("getHTTPRequest returns an error: %v", err)
+		}
 
-	p := getUpgradeProxy()
-	req, err := getHTTPRequest(server.URL)
-	if err != nil {
-		t.Errorf("getHTTPRequest returns an error: %v", err)
-	}
-
-	_, err = p.dialBackend(req)
-	if err != nil {
-		t.Errorf("Could not dial to %s, caused by: %v", req.Host, err)
-	}
+		_, err = p.dialBackend(req)
+		if err != nil {
+			t.Errorf("Could not dial to %s, caused by: %v", req.Host, err)
+		}
+	})
 }
 
 func TestInvalidHTTPDialBackend(t *testing.T) {

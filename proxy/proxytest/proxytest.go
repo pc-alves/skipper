@@ -1,13 +1,15 @@
 package proxytest
 
 import (
+	"net/http/httptest"
+	"time"
+
 	"github.com/zalando/skipper/eskip"
 	"github.com/zalando/skipper/filters"
 	"github.com/zalando/skipper/proxy"
 	"github.com/zalando/skipper/routing"
 	"github.com/zalando/skipper/routing/testdataclient"
-	"net/http/httptest"
-	"time"
+	"github.com/zalando/skipper/skptesting/httptesting"
 )
 
 type TestProxy struct {
@@ -21,7 +23,7 @@ func WithParams(fr filters.Registry, o proxy.Params, routes ...*eskip.Route) *Te
 	rt := routing.New(routing.Options{FilterRegistry: fr, DataClients: []routing.DataClient{dc}})
 	o.Routing = rt
 	pr := proxy.WithParams(o)
-	tsp := httptest.NewServer(pr)
+	tsp := httptesting.Pool.Get(pr)
 	time.Sleep(12 * time.Millisecond) // propagate data client routes
 	return &TestProxy{tsp.URL, pr, tsp}
 }
@@ -36,6 +38,6 @@ func (p *TestProxy) Close() error {
 		return err
 	}
 
-	p.server.Close()
+	httptesting.Pool.Release(p.server)
 	return nil
 }
