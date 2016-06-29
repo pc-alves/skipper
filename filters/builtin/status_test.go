@@ -30,24 +30,36 @@ func TestStatus(t *testing.T) {
 		args:         []interface{}{float64(http.StatusTeapot)},
 		expectedCode: http.StatusTeapot,
 	}} {
+		var (
+			pr  *proxytest.TestProxy
+			rsp *http.Response
+		)
+
+		release := func() {
+			pr.Close()
+
+			if rsp != nil {
+				rsp.Body.Close()
+			}
+		}
+
 		fr := make(filters.Registry)
 		fr.Register(NewStatus())
-		pr := proxytest.New(fr, &eskip.Route{
+		pr = proxytest.New(fr, &eskip.Route{
 			Filters: []*eskip.Filter{{Name: StatusName, Args: ti.args}},
 			Shunt:   true})
-		defer pr.Close()
 
 		rsp, err := http.Get(pr.URL)
 		if err != nil {
 			t.Error(ti.msg, err)
+			release()
 			continue
 		}
-
-		defer rsp.Body.Close()
 
 		if rsp.StatusCode != ti.expectedCode {
 			t.Error(ti.msg, "status code doesn't match", rsp.StatusCode, ti.expectedCode)
-			continue
 		}
+
+		release()
 	}
 }

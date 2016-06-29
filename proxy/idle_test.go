@@ -106,7 +106,6 @@ func TestIdleConns(t *testing.T) {
 				CloseIdleConnsPeriod:   ti.closeIdleConns},
 			&eskip.Route{Id: "s0", Path: "/s0", Backend: s0.URL},
 			&eskip.Route{Id: "s1", Path: "/s1", Backend: s1.URL})
-		defer p.Close()
 
 		request := func(path string, doc []byte) {
 			rsp, err := http.Get(p.URL + path)
@@ -151,5 +150,7 @@ func TestIdleConns(t *testing.T) {
 		<-time.After(10 * closePeriod)
 		close(stop)
 		wg.Wait()
+
+		p.Close()
 	}
 }

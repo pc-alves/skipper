@@ -84,24 +84,40 @@ func TestStatic(t *testing.T) {
 		expectedStatus:  http.StatusOK,
 		expectedContent: "",
 	}} {
+		var (
+			rsp *http.Response
+			pr  *proxytest.TestProxy
+		)
+
+		release := func() {
+			if rsp != nil {
+				rsp.Body.Close()
+			}
+
+			if pr != nil {
+				pr.Close()
+			}
+		}
+
 		if ti.removeFile {
 			if err := os.Remove("/tmp/static-test"); err != nil && !os.IsNotExist(err) {
 				t.Error(ti.msg, err)
+				release()
 				continue
 			}
 		} else {
 			if err := ioutil.WriteFile("/tmp/static-test", []byte(ti.content), os.ModePerm); err != nil {
 				t.Error(ti.msg, err)
+				release()
 				continue
 			}
 		}
 
 		fr := make(filters.Registry)
 		fr.Register(NewStatic())
-		pr := proxytest.New(fr, &eskip.Route{
+		pr = proxytest.New(fr, &eskip.Route{
 			Filters: []*eskip.Filter{{Name: StaticName, Args: ti.args}},
 			Shunt:   true})
-		defer pr.Close()
 
 		rsp, err := http.Get(pr.URL + ti.path)
 		if err != nil {
@@ -109,26 +125,29 @@ func TestStatic(t *testing.T) {
 			continue
 		}
 
-		defer rsp.Body.Close()
-
 		if rsp.StatusCode != ti.expectedStatus {
 			t.Error(ti.msg, "status code doesn't match", rsp.StatusCode, ti.expectedStatus)
+			release()
 			continue
 		}
 
 		if rsp.StatusCode != http.StatusOK {
+			release()
 			continue
 		}
 
 		content, err := ioutil.ReadAll(rsp.Body)
 		if err != nil {
 			t.Error(ti.msg, err)
+			release()
 			continue
 		}
 
 		if string(content) != ti.expectedContent {
 			t.Error(ti.msg, "content doesn't match", string(content), ti.expectedContent)
 		}
+
+		release()
 	}
 }
 
@@ -154,12 +173,14 @@ func TestSameFileMultipleTimes(t *testing.T) {
 			return
 		}
 
-		defer rsp.Body.Close()
 		_, err = ioutil.ReadAll(rsp.Body)
 		if err != nil {
 			t.Error(err)
+			rsp.Body.Close()
 			return
 		}
+
+		rsp.Body.Close()
 	}
 }
 

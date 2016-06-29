@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -174,7 +175,22 @@ func TestHeader(t *testing.T) {
 		valid:      true,
 		host:       "www.example.org",
 	}} {
-		bs := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			bs  *httptest.Server
+			pr  *proxytest.TestProxy
+			rsp *http.Response
+		)
+
+		release := func() {
+			httptesting.Pool.Release(bs)
+			pr.Close()
+
+			if rsp != nil {
+				rsp.Body.Close()
+			}
+		}
+
+		bs = httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for n, vs := range r.Header {
 				if strings.HasPrefix(n, "X-Test-") {
 					w.Header()["X-Test-Request-"+n[7:]] = vs
@@ -187,7 +203,6 @@ func TestHeader(t *testing.T) {
 
 			w.Header().Set("X-Request-Host", r.Host)
 		}))
-		defer httptesting.Pool.Release(bs)
 
 		fr := make(filters.Registry)
 		fr.Register(NewSetRequestHeader())
@@ -196,14 +211,14 @@ func TestHeader(t *testing.T) {
 		fr.Register(NewSetResponseHeader())
 		fr.Register(NewAppendResponseHeader())
 		fr.Register(NewDropResponseHeader())
-		pr := proxytest.New(fr, &eskip.Route{
+		pr = proxytest.New(fr, &eskip.Route{
 			Filters: []*eskip.Filter{{Name: ti.filterName, Args: ti.args}},
 			Backend: bs.URL})
-		defer pr.Close()
 
 		req, err := http.NewRequest("GET", pr.URL, nil)
 		if err != nil {
 			t.Error(ti.msg, err)
+			release()
 			continue
 		}
 
@@ -211,15 +226,17 @@ func TestHeader(t *testing.T) {
 			req.Header[n] = vs
 		}
 
-		rsp, err := http.DefaultClient.Do(req)
+		rsp, err = http.DefaultClient.Do(req)
 		if err != nil {
 			t.Error(ti.msg, err)
+			release()
 			continue
 		}
 
 		if ti.valid && rsp.StatusCode != http.StatusOK ||
 			!ti.valid && rsp.StatusCode != http.StatusNotFound {
 			t.Error(ti.msg, "failed to validate arguments")
+			release()
 			continue
 		}
 
@@ -230,5 +247,7 @@ func TestHeader(t *testing.T) {
 		if ti.valid {
 			testHeaders(t, ti.msg, rsp.Header, ti.expectedHeader)
 		}
+
+		release()
 	}
 }

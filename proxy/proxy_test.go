@@ -824,6 +824,21 @@ func TestHostHeader(t *testing.T) {
 		"www.example.org",
 		"custom.example.org",
 	}} {
+		var (
+			rsp *http.Response
+			ps  *httptest.Server
+		)
+
+		release := func() {
+			if rsp != nil {
+				rsp.Body.Close()
+			}
+
+			if ps != nil {
+				httptesting.Pool.Release(ps)
+			}
+		}
+
 		// replace the host in the route format
 		f := ti.routeFmt + `;healthcheck: Path("/healthcheck") -> "%s"`
 		var route string
@@ -834,10 +849,10 @@ func TestHostHeader(t *testing.T) {
 		}
 
 		// create a dataclient with the route
-		println(route)
 		dc, err := testdataclient.NewDoc(route)
 		if err != nil {
 			t.Error(ti.msg, "failed to parse route", err)
+			release()
 			continue
 		}
 
@@ -847,8 +862,7 @@ func TestHostHeader(t *testing.T) {
 			MatchingOptions: routing.MatchingOptionsNone,
 			PollTimeout:     42 * time.Microsecond,
 			DataClients:     []routing.DataClient{dc}})
-		ps := httptesting.Pool.Get(WithParams(Params{Routing: r, Flags: ti.flags}))
-		defer httptesting.Pool.Release(ps)
+		ps = httptesting.Pool.Get(WithParams(Params{Routing: r, Flags: ti.flags}))
 
 		// wait for the routing table was activated
 		healthcheckDone := make(chan struct{})
@@ -871,28 +885,34 @@ func TestHostHeader(t *testing.T) {
 		}
 		if timeouted {
 			t.Error(ti.msg, "startup timeout")
+			release()
 			continue
 		}
 
 		req, err := http.NewRequest("GET", ps.URL, nil)
 		if err != nil {
 			t.Error(ti.msg, err)
+			release()
 			continue
 		}
 
 		req.Host = ti.incomingHost
-		rsp, err := (&http.Client{}).Do(req)
+		rsp, err = (&http.Client{}).Do(req)
 		if err != nil {
 			t.Error(ti.msg, "failed to make request")
+			release()
 			continue
 		}
 
 		if ti.flags.Debug() {
+			release()
 			continue
 		}
 
 		if rsp.Header.Get("X-Received-Host") != ti.expectedHost {
 			t.Error(ti.msg, "wrong host", rsp.Header.Get("X-Received-Host"), ti.expectedHost)
 		}
+
+		release()
 	}
 }

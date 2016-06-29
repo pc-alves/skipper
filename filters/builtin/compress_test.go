@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -410,7 +411,27 @@ func TestCompress(t *testing.T) {
 			"Content-Encoding": []string{"gzip"},
 			"Vary":             []string{"Accept-Encoding"}},
 	}} {
-		s := httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		var (
+			rsp *http.Response
+			s   *httptest.Server
+			p   *proxytest.TestProxy
+		)
+
+		release := func() {
+			if rsp != nil {
+				rsp.Body.Close()
+			}
+
+			if s != nil {
+				httptesting.Pool.Release(s)
+			}
+
+			if p != nil {
+				p.Close()
+			}
+		}
+
+		s = httptesting.Pool.Get(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			setHeaders(w.Header(), ti.responseHeader)
 			count := 0
 			for count < ti.contentLength {
@@ -424,28 +445,26 @@ func TestCompress(t *testing.T) {
 				time.Sleep(writeDelay)
 			}
 		}))
-		defer httptesting.Pool.Release(s)
 
-		p := proxytest.New(MakeRegistry(), &eskip.Route{
+		p = proxytest.New(MakeRegistry(), &eskip.Route{
 			Filters: []*eskip.Filter{{Name: CompressName, Args: ti.compressArgs}},
 			Backend: s.URL})
-		defer p.Close()
 
 		req, err := http.NewRequest("GET", p.URL, nil)
 		if err != nil {
 			t.Error(ti.msg, err)
+			release()
 			continue
 		}
 
 		req.Header.Set("Accept-Encoding", ti.acceptEncoding)
 
-		rsp, err := http.DefaultTransport.RoundTrip(req)
+		rsp, err = http.DefaultTransport.RoundTrip(req)
 		if err != nil {
 			t.Error(ti.msg, err)
+			release()
 			continue
 		}
-
-		defer rsp.Body.Close()
 
 		rsp.Header.Del("Server")
 		rsp.Header.Del("X-Powered-By")
@@ -459,6 +478,7 @@ func TestCompress(t *testing.T) {
 			printHeader(t, rsp.Header, ti.msg, "invalid header", "got")
 
 			t.Error(ti.msg, "invalid header")
+			release()
 			continue
 		}
 
@@ -467,6 +487,8 @@ func TestCompress(t *testing.T) {
 		} else if !ok {
 			t.Error(ti.msg, "invalid content")
 		}
+
+		release()
 	}
 }
 
