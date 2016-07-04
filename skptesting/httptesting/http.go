@@ -42,6 +42,7 @@ var (
 )
 
 func (h *handler) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
+	rsp.Header().Set("Connection", "close")
 	h.handler.ServeHTTP(rsp, req)
 }
 
