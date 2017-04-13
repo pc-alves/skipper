@@ -42,6 +42,18 @@ const (
 	// The default period at which the idle connections are forcibly
 	// closed.
 	DefaultCloseIdleConnsPeriod = 20 * time.Second
+
+	hopHeaders = map[string]bool{
+   	 "Connection": true,
+   	 "Proxy-Connection": true,
+   	 "Keep-Alive": true,
+   	 "Proxy-Authenticate": true,
+   	 "Proxy-Authorization": true,
+   	 "Te": true,
+   	 "Trailer": true,
+   	 "Transfer-Encoding": true,
+   	 "Upgrade":true,
+   }
 )
 
 // Flags control the behavior of the proxy.
@@ -187,9 +199,22 @@ func copyHeader(to, from http.Header) {
 	}
 }
 
+func copyHeaderExcluding(to, from http.Header, excludeHeaders map[string]bool) {
+	for k, v := range from {
+		if len(excludeHeaders) == 0 || !excludeHeaders[k]
+			to[http.CanonicalHeaderKey(k)] = v
+	}
+}
+
 func cloneHeader(h http.Header) http.Header {
 	hh := make(http.Header)
 	copyHeader(hh, h)
+	return hh
+}
+
+func cloneHeaderExcluding(h http.Header, excludeList []string) http.Header {
+	hh := make(http.Header)
+	copyHeaderExcluding(hh, h)
 	return hh
 }
 
@@ -234,12 +259,14 @@ func mapRequest(r *http.Request, rt *routing.Route, host string) (*http.Request,
 	rr.Header = cloneHeader(r.Header)
 	rr.Host = host
 
-	// If there is basic auth configured int the URL we add them as headers
+	// If there is basic auth configured in the URL we add them as headers
 	if u.User != nil {
 		up := u.User.String()
 		upBase64 := base64.StdEncoding.EncodeToString([]byte(up))
 		rr.Header.Add("Authorization", fmt.Sprintf("Basic %s", upBase64))
 	}
+
+	// TODO :: handle FWD headers
 
 	return rr, nil
 }
