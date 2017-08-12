@@ -83,6 +83,12 @@ const (
 	// and with the approximate changes they would make to the
 	// response.
 	Debug
+
+  // ProxyHeaders indicates whether the outgoing request will see their
+	// Forwarded headers ('Forwarded' or 'X-Forwarded-For') added or updated.
+	// The 'Forwarded' header is added, unless the 'X-Forwarded-For' is already
+	// present.
+  ProxyHeaders
 )
 
 // Options are deprecated alias for Flags.
@@ -94,6 +100,7 @@ const (
 	OptionsPreserveOriginal = Options(PreserveOriginal)
 	OptionsPreserveHost     = Options(PreserveHost)
 	OptionsDebug            = Options(Debug)
+	OptionsProxyHeaders     = Options(ProxyHeaders)
 )
 
 // Proxy initialization options.
@@ -141,6 +148,9 @@ func (f Flags) PreserveHost() bool { return f&PreserveHost != 0 }
 
 // When set, the proxy runs in debug mode.
 func (f Flags) Debug() bool { return f&Debug != 0 }
+
+// When set, the proxy headers will be processed according to the RFC
+func (f Flags) ProxyHeaders() bool { return f&ProxyHeaders != 0 }
 
 // Priority routes are custom route implementations that are matched against
 // each request before the routes in the general lookup tree.
@@ -212,7 +222,7 @@ func cloneHeader(h http.Header) http.Header {
 	return hh
 }
 
-func cloneHeaderExcluding(h http.Header, excludeList []string) http.Header {
+func cloneHeaderExcluding(h http.Header, excludeList map[string]bool) http.Header {
 	hh := make(http.Header)
 	copyHeaderExcluding(hh, h)
 	return hh
@@ -244,9 +254,22 @@ func copyStream(to flusherWriter, from io.Reader) error {
 	}
 }
 
+// Adds the 'Forwarded' header if not present.
+// Adds the current origin IP to the list if one of the headers exist
+// TODO :: implement method
+func setForwardHeaders(from http.Header) {
+	// Is there a X-Forwarded-For or Forwarded Header?
+
+	// a) Yes, it's a 'Forwarded' header
+
+	// b) Yes, it's a 'X-Forwarded-For' header
+
+ // No header. Include the 'Forwarded' header
+}
+
 // creates an outgoing http request to be forwarded to the route endpoint
 // based on the augmented incoming request
-func mapRequest(r *http.Request, rt *routing.Route, host string) (*http.Request, error) {
+func mapRequest(r *http.Request, rt *routing.Route, host string, proxyHeaders bool) (*http.Request, error) {
 	u := r.URL
 	u.Scheme = rt.Scheme
 	u.Host = rt.Host
@@ -256,7 +279,10 @@ func mapRequest(r *http.Request, rt *routing.Route, host string) (*http.Request,
 		return nil, err
 	}
 
-	rr.Header = cloneHeader(r.Header)
+  if proxyHeaders
+		rr.Header = cloneHeaderExcluding(r.Header, hopHeaders)
+	else
+		rr.Header = cloneHeader(r.Header)
 	rr.Host = host
 
 	// If there is basic auth configured in the URL we add them as headers
@@ -266,7 +292,8 @@ func mapRequest(r *http.Request, rt *routing.Route, host string) (*http.Request,
 		rr.Header.Add("Authorization", fmt.Sprintf("Basic %s", upBase64))
 	}
 
-	// TODO :: handle FWD headers
+	if proxyHeaders
+		setForwardHeaders(rr.Header)
 
 	return rr, nil
 }
@@ -544,7 +571,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if rt.Shunt {
 			rs = shunt(r)
 		} else if p.flags.Debug() {
-			debugReq, err = mapRequest(r, rt, c.outgoingHost)
+			debugReq, err = mapRequest(r, rt, c.outgoingHost, p.flags.ProxyHeaders())
 			if err != nil {
 				dbgResponse(w, &debugInfo{
 					route:        &rt.Route,
@@ -558,7 +585,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rs = &http.Response{Header: make(http.Header)}
 		} else {
 
-			rr, err := mapRequest(r, rt, c.outgoingHost)
+			rr, err := mapRequest(r, rt, c.outgoingHost, p.flags.ProxyHeaders())
 			if err != nil {
 				log.Errorf("Could not mapRequest, caused by: %v", err)
 				sendError(w,
