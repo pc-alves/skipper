@@ -256,15 +256,24 @@ func copyStream(to flusherWriter, from io.Reader) error {
 
 // Adds the 'Forwarded' header if not present.
 // Adds the current origin IP to the list if one of the headers exist
-// TODO :: implement method
-func setForwardHeaders(from http.Header) {
-	// Is there a X-Forwarded-For or Forwarded Header?
+func setForwardHeaders(from http.Header, host string) {
+	newValue := ""
+	headerName := ""
 
-	// a) Yes, it's a 'Forwarded' header
+	currentValue, exists := from["X-Forwarded-For"]
+	if exists {
+		// a) Yes, it's a 'X-Forwarded-For' header
+		headerName = "X-Forwarded-For"
+    newValue = currentValue + ", " + host
+	} else {
+			// b) No, we will create/append a 'Forwarded' header
+			currentValue, exists = from["Forwarded"]
 
-	// b) Yes, it's a 'X-Forwarded-For' header
+			headerName = "Forwarded"
+			// TODO :: build on top of existing value, or create a new one
+	}
 
- // No header. Include the 'Forwarded' header
+	from.Set(headerName, newValue)
 }
 
 // creates an outgoing http request to be forwarded to the route endpoint
@@ -293,7 +302,7 @@ func mapRequest(r *http.Request, rt *routing.Route, host string, proxyHeaders bo
 	}
 
 	if proxyHeaders
-		setForwardHeaders(rr.Header)
+		setForwardHeaders(rr.Header, host)
 
 	return rr, nil
 }
