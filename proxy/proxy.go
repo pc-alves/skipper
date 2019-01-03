@@ -86,6 +86,10 @@ const (
 	// HopHeadersRemoval indicates whether the Hop Headers should be removed
 	// in compliance with RFC 2616
 	HopHeadersRemoval
+
+	// ForwardedHeaders indicates whether X-Forwarded-For header will changed by
+	// skipper to add the IP before it.
+	ForwardedHeaders
 )
 
 // Options are deprecated alias for Flags.
@@ -98,6 +102,7 @@ const (
 	OptionsPreserveHost      = Options(PreserveHost)
 	OptionsDebug             = Options(Debug)
 	OptionsHopHeadersRemoval = Options(HopHeadersRemoval)
+	OptionsForwardedHeaders  = Options(ForwardedHeaders)
 )
 
 // Proxy initialization options.
@@ -232,6 +237,9 @@ func (f Flags) Debug() bool { return f&Debug != 0 }
 
 // When set, the proxy will remove the Hop Headers
 func (f Flags) HopHeadersRemoval() bool { return f&HopHeadersRemoval != 0 }
+
+// When set, the caller IP will be added to the X-Forwarded-For header
+func (f Flags) ForwardedHeaders() bool { return f&ForwardedHeaders != 0 }
 
 // Priority routes are custom route implementations that are matched against
 // each request before the routes in the general lookup tree.
