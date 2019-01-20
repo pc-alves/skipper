@@ -380,7 +380,7 @@ func copyStream(to flusherWriter, from io.Reader) error {
 
 // creates an outgoing http request to be forwarded to the route endpoint
 // based on the augmented incoming request
-func mapRequest(r *http.Request, rt *routing.Route, host string, removeHopHeaders bool) (*http.Request, error) {
+func mapRequest(r *http.Request, rt *routing.Route, host string, removeHopHeaders bool, proxyHeaders bool) (*http.Request, error) {
 	u := r.URL
 	u.Scheme = rt.Scheme
 	u.Host = rt.Host
@@ -415,7 +415,16 @@ func mapRequest(r *http.Request, rt *routing.Route, host string, removeHopHeader
 		rr = rr.WithContext(ot.ContextWithSpan(rr.Context(), ctxspan))
 	}
 
+	if proxyHeaders {
+		setProxyHeaders(rr, r)
+	}
+
 	return rr, nil
+}
+
+// TODO :: add proxy headers
+func setProxyHeaders(rr *http.Request, r *http.Request) {
+	rr.Header.Add("X-Forwarded-For", r.Host)
 }
 
 type skipperDialer struct {
